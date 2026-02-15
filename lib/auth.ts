@@ -20,6 +20,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           scope: 'user:read:email channel:read:subscriptions user:read:subscriptions',
         },
       },
+      // ФИКС: отключаем проверку id_token (Twitch его не возвращает)
+      checks: ['pkce'],
     }),
   ],
 
