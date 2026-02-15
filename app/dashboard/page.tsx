@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useCallback } from 'react';
-import { LogOut, Coins, Trophy, ShoppingBag, RefreshCw } from 'lucide-react';
+import { LogOut, Coins, Trophy, ShoppingBag } from 'lucide-react';
 import Link from 'next/link';
 import { checkSubscription } from '@/app/actions/subscription';
 import { claimBonus } from '@/app/actions/claimBonus';
@@ -14,7 +14,6 @@ export default function DashboardPage() {
   const [points, setPoints] = useState<number>(0);
   const [bonusClaimed, setBonusClaimed] = useState<boolean>(false);
   const [telegramId, setTelegramId] = useState<string | null>(null);
-  const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [subStatus, setSubStatus] = useState<{ subscribed: boolean; tier?: string; isGift?: boolean } | null>(null);
   const [twitchProfile, setTwitchProfile] = useState<{ avatar: string; banner?: string } | null>(null);
 
@@ -26,7 +25,6 @@ export default function DashboardPage() {
 
   const [claimLoading, setClaimLoading] = useState(false);
 
-  // Загрузка всех данных
   const loadData = useCallback(async () => {
     if (!session?.user?.twitchId) return;
 
@@ -34,22 +32,16 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
 
-      console.log('[DASHBOARD] Загружаем данные профиля...');
-
       // Профиль
       const profileRes = await fetch('/api/user/profile');
       if (profileRes.ok) {
         const data = await profileRes.json();
-        console.log('[DASHBOARD] Данные профиля:', data);
         setPoints(data.points ?? 0);
         setBonusClaimed(data.bonus_claimed ?? false);
         setTelegramId(data.telegram_id ?? null);
-        setTelegramUsername(data.telegram_username ?? null);
-      } else {
-        console.warn('[DASHBOARD] Профиль не загрузился:', profileRes.status);
       }
 
-      // Подписка Twitch
+      // Подписка
       const subData = await checkSubscription();
       setSubStatus(subData || { subscribed: false });
 
@@ -85,7 +77,7 @@ export default function DashboardPage() {
         banner: session.user.image || '/default-avatar.png',
       });
     } catch (err: any) {
-      console.error('[DASHBOARD] Ошибка загрузки:', err);
+      console.error('Dashboard load error:', err);
       setError('Ошибка загрузки данных');
     } finally {
       setLoading(false);
@@ -100,25 +92,6 @@ export default function DashboardPage() {
     }
   }, [status, loadData]);
 
-  // Автообновление после генерации ссылки (чтобы поймать привязку бота)
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
-    if (linkData?.link && !telegramId) {
-      console.log('[DASHBOARD] Запускаем polling для проверки привязки Telegram');
-      interval = setInterval(() => {
-        loadData();
-      }, 5000); // каждые 5 секунд
-    }
-
-    return () => {
-      if (interval) {
-        console.log('[DASHBOARD] Останавливаем polling');
-        clearInterval(interval);
-      }
-    };
-  }, [linkData, telegramId, loadData]);
-
   const handleGenerateLink = async () => {
     setLinkLoading(true);
     setLinkData(null);
@@ -126,7 +99,6 @@ export default function DashboardPage() {
       const result = await generateTelegramLink();
       if (result.success && result.link) {
         setLinkData({ link: result.link });
-        console.log('[DASHBOARD] Ссылка сгенерирована:', result.link);
       } else {
         setError(result.message || 'Не удалось сгенерировать ссылку');
       }
@@ -138,8 +110,6 @@ export default function DashboardPage() {
   };
 
   const handleClaimBonus = async () => {
-    if (!session?.user?.twitchId || bonusClaimed) return;
-
     setClaimLoading(true);
     try {
       const result = await claimBonus();
@@ -147,20 +117,14 @@ export default function DashboardPage() {
         setPoints(result.newPoints ?? points + 15);
         setBonusClaimed(true);
         alert(result.message || 'Бонус +15 получен!');
-        loadData(); // обновляем данные
       } else {
         alert(result.message || 'Не удалось получить бонус');
       }
-    } catch (err) {
-      alert('Ошибка при начислении');
+    } catch {
+      alert('Произошла ошибка');
     } finally {
       setClaimLoading(false);
     }
-  };
-
-  // Ручное обновление (на случай, если polling не нужен)
-  const handleRefresh = () => {
-    loadData();
   };
 
   if (status === 'loading' || loading) {
@@ -283,7 +247,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Блок +15 за Telegram */}
+        {/* Блок +15 */}
         <div className="mt-10 bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
           <h2 className="text-2xl font-bold mb-6">Получи +15 баллов бесплатно</h2>
 
@@ -303,62 +267,51 @@ export default function DashboardPage() {
               После подписки привяжи аккаунт и нажми кнопку ниже — система проверит и начислит баллы.
             </p>
 
-            <div className="mt-4 flex items-center gap-4">
-              {!telegramId ? (
+            {!telegramId ? (
+              <div>
                 <button
                   onClick={handleGenerateLink}
                   disabled={linkLoading}
-                  className={`px-8 py-4 rounded-xl font-bold transition ${
+                  className={`w-full px-8 py-4 rounded-xl font-bold transition ${
                     linkLoading ? 'bg-gray-600 cursor-not-allowed text-gray-300' : 'bg-yellow-600 hover:bg-yellow-500 text-white'
                   }`}
                 >
                   {linkLoading ? 'Генерация...' : 'Привязать Telegram'}
                 </button>
-              ) : (
-                <div className="flex items-center gap-4 flex-wrap">
-                  <p className="text-green-400 font-medium">
-                    Telegram привязан (@{telegramUsername || telegramId.slice(0, 8) + '...'}) 
-                  </p>
 
-                  <button
-                    onClick={handleClaimBonus}
-                    disabled={claimLoading || bonusClaimed}
-                    className={`px-8 py-4 rounded-xl font-bold transition ${
-                      bonusClaimed || claimLoading
-                        ? 'bg-gray-600 cursor-not-allowed text-gray-300'
-                        : 'bg-[#9146FF] hover:bg-[#a76bff] text-white'
-                    }`}
-                  >
-                    {claimLoading
-                      ? 'Проверка подписки...'
-                      : bonusClaimed
-                      ? 'Бонус получен'
-                      : 'Проверить подписку и получить +15'}
-                  </button>
-                </div>
-              )}
-
-              <button
-                onClick={handleRefresh}
-                className="p-3 bg-zinc-700 hover:bg-zinc-600 rounded-full transition"
-                title="Обновить данные"
-              >
-                <RefreshCw size={20} />
-              </button>
-            </div>
-
-            {linkData?.link && (
-              <div className="mt-6 p-4 bg-zinc-900 rounded-lg border border-zinc-700">
-                <p className="text-zinc-300 mb-2">Ссылка для бота (уже открыта):</p>
-                <a
-                  href={linkData.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#9146FF] hover:underline break-all block font-medium"
-                >
-                  {linkData.link}
-                </a>
+                {linkData?.link && (
+                  <div className="mt-4 p-4 bg-zinc-900 rounded-lg border border-zinc-700">
+                    <p className="text-zinc-300 mb-2">Перейди по этой ссылке:</p>
+                    <a
+                      href={linkData.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#9146FF] hover:underline break-all block"
+                    >
+                      {linkData.link}
+                    </a>
+                    <p className="text-sm text-zinc-500 mt-3">
+                      После перехода бот подтвердит привязку. Затем вернись сюда и нажми кнопку ниже.
+                    </p>
+                  </div>
+                )}
               </div>
+            ) : (
+              <button
+                onClick={handleClaimBonus}
+                disabled={claimLoading || bonusClaimed}
+                className={`w-full px-8 py-4 rounded-xl font-bold transition ${
+                  bonusClaimed || claimLoading
+                    ? 'bg-gray-600 cursor-not-allowed text-gray-300'
+                    : 'bg-[#9146FF] hover:bg-[#a76bff] text-white'
+                }`}
+              >
+                {claimLoading
+                  ? 'Проверка подписки...'
+                  : bonusClaimed
+                  ? 'Бонус получен'
+                  : 'Проверить подписку и получить +15'}
+              </button>
             )}
           </div>
 
