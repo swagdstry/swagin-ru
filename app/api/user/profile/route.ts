@@ -20,10 +20,9 @@ export async function GET() {
 
   console.log('[PROFILE] Ищем профиль по twitch_id:', twitchId);
 
-  // Запрашиваем ТОЛЬКО существующие поля
   let { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('points, telegram_id, bonus_claimed')  // ← убрал telegram_username, если его нет
+    .select('points, telegram_id, bonus_claimed')  // ← убрали telegram_username
     .eq('twitch_id', twitchId)
     .maybeSingle();
 
