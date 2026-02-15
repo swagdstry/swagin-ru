@@ -1,7 +1,7 @@
 // app/api/telegram/webhook/route.ts
+export const runtime = 'nodejs'; 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-export const maxDuration = 30; // увеличим таймаут на 30s
+export const maxDuration = 30;
 
 import { NextRequest } from 'next/server';
 import { Bot, webhookCallback } from 'grammy';
