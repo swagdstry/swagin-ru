@@ -9,6 +9,9 @@ if (!process.env.NEXTAUTH_SECRET) {
 if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
   console.error("TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET missing!");
 }
+if (!process.env.NEXTAUTH_URL) {
+  console.error("NEXTAUTH_URL is missing!");
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -19,6 +22,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         params: {
           scope: 'user:read:email channel:read:subscriptions user:read:subscriptions',
         },
+      },
+      // Фикс: отключаем ожидание id_token (Twitch его не даёт)
+      checks: ['pkce'],
+
+      // Маппинг профиля вручную (Twitch возвращает нестандартный формат)
+      profile(profile) {
+        return {
+          id: profile.id,
+          name: profile.login,
+          email: profile.email,
+          image: profile.profile_image_url,
+          twitchId: profile.id,
+          login: profile.login,
+          displayName: profile.display_name,
+        };
       },
     }),
   ],
@@ -41,21 +59,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.displayName = profile?.display_name ?? profile?.name;
       }
 
-      // Refresh с защитой
+      // Refresh с явной проверкой типа (фикс TS ошибки >=)
+      const expiresAt = token.expiresAt as number | undefined;
+
       if (
-        typeof token.expiresAt === "number" &&
-        Date.now() >= token.expiresAt &&
+        expiresAt != null &&
+        typeof expiresAt === "number" &&
+        Date.now() >= expiresAt &&
         typeof token.refreshToken === "string" &&
-        process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET
+        process.env.TWITCH_CLIENT_ID &&
+        process.env.TWITCH_CLIENT_SECRET
       ) {
+        console.log('[AUTH] Refreshing Twitch token...');
         const refreshed = await refreshTwitchToken(token.refreshToken);
         if (refreshed?.access_token) {
           token.accessToken = refreshed.access_token;
           token.refreshToken = refreshed.refresh_token ?? token.refreshToken;
           token.expiresAt = Date.now() + (refreshed.expires_in ?? 14400) * 1000;
           delete token.error;
+          console.log('[AUTH] Token refreshed successfully');
         } else {
           token.error = "RefreshAccessTokenError";
+          console.error('[AUTH] Token refresh failed');
         }
       }
 
@@ -76,6 +101,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
   pages: {
     signIn: "/auth/login",
+    error: "/auth/error", // ← если есть своя страница ошибки
   },
 
   debug: process.env.NODE_ENV === "development",
@@ -106,6 +132,7 @@ async function refreshTwitchToken(refreshToken: string) {
       console.error("Refresh failed:", res.status, text);
       return null;
     }
+
     return await res.json();
   } catch (err) {
     console.error("Refresh error:", err);
