@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const [points, setPoints] = useState<number>(0);
   const [bonusClaimed, setBonusClaimed] = useState<boolean>(false);
   const [telegramId, setTelegramId] = useState<string | null>(null);
+  const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [subStatus, setSubStatus] = useState<{ subscribed: boolean; tier?: string; isGift?: boolean } | null>(null);
   const [twitchProfile, setTwitchProfile] = useState<{ avatar: string; banner?: string } | null>(null);
 
@@ -33,20 +34,23 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
 
-      // Профиль
+      // Профиль (баллы, telegram, bonus_claimed)
       const profileRes = await fetch('/api/user/profile');
       if (profileRes.ok) {
         const data = await profileRes.json();
         setPoints(data.points ?? 0);
         setBonusClaimed(data.bonus_claimed ?? false);
         setTelegramId(data.telegram_id ?? null);
+        setTelegramUsername(data.telegram_username ?? null);
+      } else {
+        console.warn('Профиль не загрузился:', profileRes.status);
       }
 
       // Подписка Twitch
       const subData = await checkSubscription();
       setSubStatus(subData || { subscribed: false });
 
-      // Twitch профиль
+      // Twitch профиль (аватар + баннер)
       const twitchId = session.user.twitchId;
       const accessToken = session.user.accessToken;
       const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID;
@@ -94,7 +98,7 @@ export default function DashboardPage() {
     }
   }, [status, loadData]);
 
-  // Генерация ссылки
+  // Генерация ссылки для привязки Telegram
   const handleGenerateLink = async () => {
     setLinkLoading(true);
     setLinkData(null);
@@ -114,6 +118,8 @@ export default function DashboardPage() {
 
   // Проверка и начисление бонуса
   const handleClaimBonus = async () => {
+    if (!session?.user?.twitchId || bonusClaimed) return;
+
     setClaimLoading(true);
     try {
       const result = await claimBonus();
@@ -121,19 +127,15 @@ export default function DashboardPage() {
         setPoints(result.newPoints ?? points + 15);
         setBonusClaimed(true);
         alert(result.message || 'Бонус +15 получен!');
+        loadData(); // обновляем все данные
       } else {
         alert(result.message || 'Не удалось получить бонус');
       }
-    } catch {
-      alert('Произошла ошибка');
+    } catch (err) {
+      alert('Ошибка при начислении');
     } finally {
       setClaimLoading(false);
     }
-  };
-
-  // Автообновление после привязки (можно улучшить polling'ом)
-  const handleLinkSuccess = () => {
-    loadData(); // перезагружаем данные, чтобы появилась кнопка проверки
   };
 
   if (status === 'loading' || loading) {
@@ -161,7 +163,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-black to-zinc-950 text-white p-6 md:p-10">
       <div className="max-w-5xl mx-auto space-y-10">
-        {/* Профиль */}
+        {/* Карточка профиля */}
         <Link href="/profile" className="block group relative">
           <div className="relative h-64 md:h-80 rounded-3xl overflow-hidden shadow-2xl border border-white/10 hover:border-[#9146FF]/60 transition-all duration-300">
             <div
@@ -212,7 +214,7 @@ export default function DashboardPage() {
           </div>
         </Link>
 
-        {/* Карточки */}
+        {/* Карточки баллы / подписка / магазин */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 hover:border-[#9146FF]/50 transition">
             <div className="flex items-center justify-between mb-4">
@@ -254,7 +256,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Бонус блок */}
+        {/* Блок +15 за Telegram */}
         <div className="mt-10 bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
           <h2 className="text-2xl font-bold mb-6">Получи +15 баллов бесплатно</h2>
 
@@ -275,11 +277,12 @@ export default function DashboardPage() {
             </p>
 
             {!telegramId ? (
+              // Не привязан
               <div>
                 <button
                   onClick={handleGenerateLink}
                   disabled={linkLoading}
-                  className={`w-full px-8 py-4 rounded-xl font-bold transition ${
+                  className={`w-full md:w-auto px-8 py-4 rounded-xl font-bold transition ${
                     linkLoading ? 'bg-gray-600 cursor-not-allowed text-gray-300' : 'bg-yellow-600 hover:bg-yellow-500 text-white'
                   }`}
                 >
@@ -288,12 +291,12 @@ export default function DashboardPage() {
 
                 {linkData?.link && (
                   <div className="mt-4 p-4 bg-zinc-900 rounded-lg border border-zinc-700">
-                    <p className="text-zinc-300 mb-2">Перейди по этой ссылке:</p>
+                    <p className="text-zinc-300 mb-2">Перейди по этой ссылке в бота:</p>
                     <a
                       href={linkData.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[#9146FF] hover:underline break-all block"
+                      className="text-[#9146FF] hover:underline break-all block font-medium"
                     >
                       {linkData.link}
                     </a>
@@ -304,21 +307,28 @@ export default function DashboardPage() {
                 )}
               </div>
             ) : (
-              <button
-                onClick={handleClaimBonus}
-                disabled={claimLoading || bonusClaimed}
-                className={`w-full px-8 py-4 rounded-xl font-bold transition ${
-                  bonusClaimed || claimLoading
-                    ? 'bg-gray-600 cursor-not-allowed text-gray-300'
-                    : 'bg-[#9146FF] hover:bg-[#a76bff] text-white'
-                }`}
-              >
-                {claimLoading
-                  ? 'Проверка подписки...'
-                  : bonusClaimed
-                  ? 'Бонус получен'
-                  : 'Проверить подписку и получить +15'}
-              </button>
+              // Привязан — кнопка получения бонуса
+              <div>
+                <p className="text-green-400 mb-4">
+                  Telegram привязан (@{telegramUsername || telegramId.slice(0, 8) + '...'}) 
+                </p>
+
+                <button
+                  onClick={handleClaimBonus}
+                  disabled={claimLoading || bonusClaimed}
+                  className={`w-full md:w-auto px-8 py-4 rounded-xl font-bold transition ${
+                    bonusClaimed || claimLoading
+                      ? 'bg-gray-600 cursor-not-allowed text-gray-300'
+                      : 'bg-[#9146FF] hover:bg-[#a76bff] text-white'
+                  }`}
+                >
+                  {claimLoading
+                    ? 'Проверка подписки...'
+                    : bonusClaimed
+                    ? 'Бонус получен'
+                    : 'Проверить подписку и получить +15'}
+                </button>
+              </div>
             )}
           </div>
 
