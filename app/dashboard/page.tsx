@@ -211,10 +211,13 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            {/* Shimmer */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
           </div>
         </Link>
 
-        {/* Карточки баллы / подписка / магазин */}
+        {/* Карточки */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 hover:border-[#9146FF]/50 transition">
             <div className="flex items-center justify-between mb-4">
@@ -277,7 +280,7 @@ export default function DashboardPage() {
             </p>
 
             {!telegramId ? (
-              // Не привязан
+              // Telegram НЕ привязан
               <div>
                 <button
                   onClick={handleGenerateLink}
@@ -307,9 +310,9 @@ export default function DashboardPage() {
                 )}
               </div>
             ) : (
-              // Привязан — кнопка получения бонуса
+              // Telegram ПРИВЯЗАН — показываем кнопку проверки/получения
               <div>
-                <p className="text-green-400 mb-4">
+                <p className="text-green-400 mb-4 font-medium">
                   Telegram привязан (@{telegramUsername || telegramId.slice(0, 8) + '...'}) 
                 </p>
 
