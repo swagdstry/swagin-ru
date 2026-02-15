@@ -2,7 +2,7 @@
 import NextAuth from "next-auth";
 import TwitchProvider from "next-auth/providers/twitch";
 
-// Проверки env (Vercel любит логировать это)
+// Проверки env (очень важно для Vercel и дебага)
 if (!process.env.NEXTAUTH_SECRET) {
   console.error("NEXTAUTH_SECRET is required!");
 }
@@ -23,7 +23,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           scope: 'user:read:email channel:read:subscriptions user:read:subscriptions',
         },
       },
-      // Фикс: отключаем ожидание id_token (Twitch его не даёт)
+      // КРИТИЧЕСКИЙ ФИКС: отключаем ожидание id_token (Twitch его не даёт)
       checks: ['pkce'],
 
       // Маппинг профиля вручную (Twitch возвращает нестандартный формат)
@@ -101,7 +101,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
   pages: {
     signIn: "/auth/login",
-    error: "/auth/error", // ← если есть своя страница ошибки
+    error: "/auth/error", // ← добавь эту строку, если создал кастомную страницу ошибки
   },
 
   debug: process.env.NODE_ENV === "development",
