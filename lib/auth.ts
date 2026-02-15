@@ -1,24 +1,32 @@
 // lib/auth.ts
-import NextAuth from "next-auth";
-import TwitchProvider from "next-auth/providers/twitch";
+import NextAuth from 'next-auth';
+import TwitchProvider from 'next-auth/providers/twitch';
+
+if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
+  console.error('TWITCH_CLIENT_ID или TWITCH_CLIENT_SECRET не заданы!');
+}
+
+if (!process.env.NEXTAUTH_SECRET) {
+  console.error('NEXTAUTH_SECRET не задан!');
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     TwitchProvider({
-      clientId: process.env.TWITCH_CLIENT_ID ?? "",
-      clientSecret: process.env.TWITCH_CLIENT_SECRET ?? "",
+      clientId: process.env.TWITCH_CLIENT_ID || 'dummy',
+      clientSecret: process.env.TWITCH_CLIENT_SECRET || 'dummy',
       authorization: {
         params: {
-          scope: "user:read:email user:read:subscriptions openid",
+          scope: 'user:read:email user:read:subscriptions openid',
         },
       },
     }),
   ],
 
-  secret: process.env.NEXTAUTH_SECRET ?? "",
+  secret: process.env.NEXTAUTH_SECRET,
 
   session: {
-    strategy: "jwt",
+    strategy: 'jwt',
   },
 
   callbacks: {
@@ -33,11 +41,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.displayName = profile?.display_name ?? profile?.name;
       }
 
-      // Refresh (с проверкой типа)
+      // Refresh логика с проверками
       if (
-        typeof token.expiresAt === "number" &&
+        typeof token.expiresAt === 'number' &&
         Date.now() >= token.expiresAt &&
-        typeof token.refreshToken === "string"
+        typeof token.refreshToken === 'string'
       ) {
         const refreshed = await refreshTwitchToken(token.refreshToken);
         if (refreshed?.access_token) {
@@ -46,7 +54,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.expiresAt = Date.now() + (refreshed.expires_in ?? 14400) * 1000;
           delete token.error;
         } else {
-          token.error = "RefreshAccessTokenError";
+          token.error = 'RefreshAccessTokenError';
         }
       }
 
@@ -66,30 +74,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
 
   pages: {
-    signIn: "/auth/login",
+    signIn: '/auth/login',
+    error: '/auth/error',  // добавь, если хочешь кастомную страницу ошибки
   },
 
-  debug: true,
+  debug: process.env.NODE_ENV === 'development',  // только в dev
 });
 
 async function refreshTwitchToken(refreshToken: string) {
+  if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
+    console.error('Env для refresh отсутствует');
+    return null;
+  }
+
   try {
     const params = new URLSearchParams({
-      client_id: process.env.TWITCH_CLIENT_ID ?? "",
-      client_secret: process.env.TWITCH_CLIENT_SECRET ?? "",
-      grant_type: "refresh_token",
+      client_id: process.env.TWITCH_CLIENT_ID,
+      client_secret: process.env.TWITCH_CLIENT_SECRET,
+      grant_type: 'refresh_token',
       refresh_token: refreshToken,
     });
 
-    const res = await fetch("https://id.twitch.tv/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    const res = await fetch('https://id.twitch.tv/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString(),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error('Refresh failed:', res.status, await res.text());
+      return null;
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    console.error('Refresh error:', err);
     return null;
   }
 }
