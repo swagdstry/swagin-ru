@@ -1,50 +1,59 @@
-// app/api/telegram/webhook/route.ts
+// app/api/telegram/webhook/route.ts — чистый рабочий webhook 2026
 
-// Обязательно отключаем edge — Vercel по умолчанию использует его и ломает grammy
+// Обязательно отключаем edge runtime — Vercel по умолчанию использует его и ломает grammy/supabase
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30; // даём больше времени на обработку
+export const maxDuration = 30; // даём 30 секунд на обработку (Vercel Hobby лимит)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Bot, webhookCallback } from 'grammy';
 
-// Логируем при загрузке файла (проверяем, видит ли Vercel роут вообще)
-console.log('WEBHOOK ROUTE LOADED — файл импортирован и функция готова');
+console.log('WEBHOOK ROUTE LOADED — файл импортирован, функция готова к запуску');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 if (!token) {
-  console.error('TELEGRAM_BOT_TOKEN НЕ ЗАДАН В ENV VERCEL');
+  console.error('TELEGRAM_BOT_TOKEN НЕ НАЙДЕН В ENV VERCEL');
 }
 
 const bot = new Bot(token || 'dummy');
 
 bot.use(async (ctx, next) => {
-  console.log('WEBHOOK: Получено обновление от Telegram в', new Date().toISOString());
+  console.log('WEBHOOK UPDATE RECEIVED — middleware сработал');
+  console.log('Time:', new Date().toISOString());
   console.log('Update type:', Object.keys(ctx.update)[0]);
-  console.log('From:', ctx.from?.id, ctx.from?.username || 'аноним');
-  console.log('Message text:', ctx.message?.text);
-  console.log('Full update (short):', JSON.stringify(ctx.update, null, 2));
+  console.log('From ID / username:', ctx.from?.id, ctx.from?.username || 'нет');
+  console.log('Message text:', ctx.message?.text || 'нет текста');
+  console.log('Command match:', ctx.match || 'нет');
   await next();
 });
 
-// Отвечаем на любое сообщение (даже если не /start)
+// Простой ответ на любое сообщение (чтобы убедиться, что reply работает)
 bot.on('message', async (ctx) => {
-  console.log('WEBHOOK: Обработчик message сработал');
-  const text = ctx.message.text || '[без текста]';
-  await ctx.reply(`Я получил твое сообщение: "${text}"\nТвой ID: ${ctx.from?.id || 'неизвестен'}\n\nВсё работает!`);
+  console.log('MESSAGE HANDLER сработал');
+  const text = ctx.message.text || '[нет текста]';
+  await ctx.reply(
+    `Получил: "${text}"\n` +
+    `Твой ID: ${ctx.from?.id || 'неизвестен'}\n` +
+    `Время: ${new Date().toISOString()}\n\n` +
+    `Бот живой! Можно добавлять логику привязки.`
+  );
 });
 
-// Отдельный обработчик /start
+// /start отдельно
 bot.command('start', async (ctx) => {
-  console.log('WEBHOOK: /start сработал');
+  console.log('/start HANDLER сработал');
   const code = ctx.match || 'кода нет';
-  await ctx.reply(`/start получен! Код: ${code}\nТвой ID: ${ctx.from?.id || 'неизвестен'}`);
+  await ctx.reply(
+    `/start получен!\n` +
+    `Код: ${code}\n` +
+    `Твой ID: ${ctx.from?.id || 'неизвестен'}`
+  );
 });
 
 export const POST = webhookCallback(bot, 'std/http');
 
-// Для проверки в браузере (GET должен вернуть 200)
+// Для теста в браузере
 export async function GET() {
-  return new Response('Webhook активен. Отправляй POST от Telegram.', { status: 200 });
+  return new Response('Webhook активен (GET для теста). Отправляй POST от Telegram.', { status: 200 });
 }
