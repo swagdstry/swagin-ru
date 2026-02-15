@@ -1,9 +1,9 @@
 // app/auth/error/page.tsx
-'use client'; // ← Обязательно клиентский компонент!
+'use client'; // ← Ключевой фикс: полностью клиентский компонент
 
 import { useSearchParams } from 'next/navigation';
 
-export default function AuthError() {
+export default function AuthErrorPage() {
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
 
@@ -23,13 +23,13 @@ export default function AuthError() {
               <li>Twitch app не имеет нужных scope (channel:read:subscriptions)</li>
             </ul>
             <p className="text-zinc-400 mt-4">
-              Проверьте Environment Variables в Vercel и redeploy.
+              Проверьте Environment Variables в Vercel и redeploy проект.
             </p>
           </div>
         )}
 
         {error === 'AccessDenied' && (
-          <p className="text-xl text-zinc-300 mb-6">Доступ запрещён. Попробуйте войти заново или проверьте права в Twitch.</p>
+          <p className="text-xl text-zinc-300 mb-6">Доступ запрещён. Попробуйте войти заново.</p>
         )}
 
         {error && error !== 'Configuration' && error !== 'AccessDenied' && (
@@ -37,7 +37,7 @@ export default function AuthError() {
         )}
 
         {!error && (
-          <p className="text-xl text-zinc-300 mb-6">Неизвестная ошибка авторизации. Попробуйте позже.</p>
+          <p className="text-xl text-zinc-300 mb-6">Неизвестная ошибка. Попробуйте позже.</p>
         )}
 
         <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
