@@ -101,7 +101,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
   pages: {
     signIn: "/auth/login",
-    error: "/auth/error", // ← добавь эту строку, если создал кастомную страницу ошибки
+    error: "/auth/error", 
   },
 
   debug: process.env.NODE_ENV === "development",
