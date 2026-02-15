@@ -1,59 +1,50 @@
 // app/api/telegram/webhook/route.ts
+// Обязательно nodejs + force-dynamic — edge ломается с grammy
 
-// Обязательно для Vercel — отключаем edge runtime (grammy/supabase не дружат с ним)
 export const runtime = 'nodejs';
+export const preferredRegion = 'auto'; // или 'iad1' / 'cle1' для твоего региона
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30; // таймаут 30 секунд (на всякий случай)
+export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Bot, webhookCallback } from 'grammy';
 
-console.log('Webhook route LOADED at startup'); // проверяем, что файл вообще импортируется
+console.log('[Webhook] Route file LOADED at startup — file is imported');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 if (!token) {
-  console.error('TELEGRAM_BOT_TOKEN не задан в env');
+  console.error('[Webhook] TELEGRAM_BOT_TOKEN missing in env');
 }
 
-const bot = new Bot(token || 'dummy-for-logs');
+const bot = new Bot(token || 'dummy-test-token');
 
 bot.use(async (ctx, next) => {
-  console.log('=== TELEGRAM UPDATE RECEIVED ===');
+  console.log('[Webhook] UPDATE RECEIVED — middleware triggered');
   console.log('Time:', new Date().toISOString());
-  console.log('Update ID:', ctx.update.update_id);
-  console.log('From:', ctx.from?.id, ctx.from?.username, ctx.from?.first_name);
-  console.log('Chat ID / type:', ctx.chat?.id, ctx.chat?.type);
+  console.log('Update type:', Object.keys(ctx.update)[0]);
+  console.log('From ID / username:', ctx.from?.id, ctx.from?.username);
   console.log('Message text:', ctx.message?.text);
-  console.log('Command match (если команда):', ctx.match);
-  console.log('Full update (JSON):', JSON.stringify(ctx.update, null, 2));
+  console.log('Full update:', JSON.stringify(ctx.update, null, 2));
   await next();
 });
 
-// Самый простой обработчик — ответ на ЛЮБОЕ сообщение
 bot.on('message', async (ctx) => {
-  console.log('Message handler triggered');
-  const text = ctx.message.text || '[нет текста]';
-  const userId = ctx.from?.id || 'unknown';
-  
-  await ctx.reply(
-    `Я получил твое сообщение!\n\n` +
-    `Текст: "${text}"\n` +
-    `Твой ID: ${userId}\n\n` +
-    `Всё работает, можно добавлять логику привязки :)`
-  );
+  console.log('[Webhook] MESSAGE HANDLER triggered');
+  const text = ctx.message.text || '[no text]';
+  await ctx.reply(`Получил: "${text}"\nТвой ID: ${ctx.from?.id || 'unknown'}`);
 });
 
-// Отдельный обработчик /start (на случай, если .on('message') не ловит команды)
 bot.command('start', async (ctx) => {
-  console.log('/start handler triggered');
-  const code = ctx.match || 'кода нет';
-  await ctx.reply(`Команда /start получена!\nКод: ${code}\nТвой ID: ${ctx.from?.id || 'unknown'}`);
+  console.log('[Webhook] /start command triggered');
+  const code = ctx.match || 'no code';
+  await ctx.reply(`/start с кодом "${code}"\nID: ${ctx.from?.id || 'unknown'}`);
 });
 
-export const POST = webhookCallback(bot, 'std/http');
+export const POST = webhookCallback(bot, 'std/http', {
+  secretToken: 'some-secret-if-want-security', // опционально, можно убрать
+});
 
-// Для проверки в браузере
 export async function GET() {
-  return new Response('Webhook route active. Send POST from Telegram.', { status: 200 });
+  return new Response('Webhook route is active (GET for test). Use POST from Telegram.', { status: 200 });
 }
