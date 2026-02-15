@@ -17,7 +17,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.TWITCH_CLIENT_SECRET || 'dummy-for-logs',
       authorization: {
         params: {
-          scope: "user:read:email user:read:subscriptions openid",
+          scope: 'user:read:email channel:read:subscriptions user:read:subscriptions',
         },
       },
     }),
