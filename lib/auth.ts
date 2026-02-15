@@ -2,31 +2,31 @@
 import NextAuth from "next-auth";
 import TwitchProvider from "next-auth/providers/twitch";
 
-// Проверки env (чтобы сразу видеть в логах Vercel, где проблема)
+// Проверки env (для логов Vercel)
 if (!process.env.NEXTAUTH_SECRET) {
-  console.error("NEXTAUTH_SECRET is missing! Это обязательно для NextAuth v5");
+  console.error("NEXTAUTH_SECRET is missing! Required for production.");
 }
 if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
   console.error("TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET missing!");
 }
 if (!process.env.NEXTAUTH_URL) {
-  console.error("NEXTAUTH_URL missing! Должен быть https://swagin-ru.vercel.app");
+  console.error("NEXTAUTH_URL missing! Should be https://swagin-ru.vercel.app");
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     TwitchProvider({
-      clientId: process.env.TWITCH_CLIENT_ID || 'dummy-for-logs',
-      clientSecret: process.env.TWITCH_CLIENT_SECRET || 'dummy-for-logs',
+      clientId: process.env.TWITCH_CLIENT_ID || 'dummy-for-build',
+      clientSecret: process.env.TWITCH_CLIENT_SECRET || 'dummy-for-build',
       authorization: {
         params: {
           scope: 'user:read:email channel:read:subscriptions user:read:subscriptions',
         },
       },
-      // КРИТИЧЕСКИЙ ФИКС: отключаем id_token (Twitch его не возвращает)
+      // КРИТИЧЕСКИЙ ФИКС: отключаем проверку id_token (Twitch его не возвращает)
       checks: ['pkce'],
 
-      // Маппим профиль вручную
+      // Маппинг профиля вручную
       profile(profile) {
         return {
           id: profile.id,
@@ -59,7 +59,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.displayName = profile?.display_name ?? profile?.name;
       }
 
-      // Refresh логика с защитой типов
+      // Refresh логика с защитой типов (фикс TS ошибки)
       const expiresAt = token.expiresAt as number | undefined;
 
       if (
@@ -77,10 +77,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.refreshToken = refreshed.refresh_token ?? token.refreshToken;
           token.expiresAt = Date.now() + (refreshed.expires_in ?? 14400) * 1000;
           delete token.error;
-          console.log('[AUTH] Token refreshed');
+          console.log('[AUTH] Token refreshed successfully');
         } else {
           token.error = "RefreshAccessTokenError";
-          console.error('[AUTH] Refresh failed');
+          console.error('[AUTH] Token refresh failed');
         }
       }
 
@@ -101,7 +101,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
   pages: {
     signIn: "/auth/login",
-    // error: "/auth/error", — закомментируй или удали, если не хочешь кастомную страницу ошибки
+    // error: "/auth/error", — закомментируй или удали, если не хочешь кастомную страницу
   },
 
   debug: process.env.NODE_ENV === "development",
