@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useCallback } from 'react';
-import { LogOut, Coins, Trophy, ShoppingBag } from 'lucide-react';
+import { LogOut, Coins, Trophy, ShoppingBag, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { checkSubscription } from '@/app/actions/subscription';
 import { claimBonus } from '@/app/actions/claimBonus';
@@ -34,7 +34,7 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
 
-      // Профиль (баллы, telegram, bonus_claimed)
+      // Профиль
       const profileRes = await fetch('/api/user/profile');
       if (profileRes.ok) {
         const data = await profileRes.json();
@@ -50,7 +50,7 @@ export default function DashboardPage() {
       const subData = await checkSubscription();
       setSubStatus(subData || { subscribed: false });
 
-      // Twitch профиль (аватар + баннер)
+      // Twitch профиль
       const twitchId = session.user.twitchId;
       const accessToken = session.user.accessToken;
       const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID;
@@ -98,7 +98,18 @@ export default function DashboardPage() {
     }
   }, [status, loadData]);
 
-  // Генерация ссылки для привязки Telegram
+  // Поллинг после генерации ссылки (каждые 5 сек проверяем привязку)
+  useEffect(() => {
+    if (linkData?.link && !telegramId) {
+      const interval = setInterval(() => {
+        loadData();
+      }, 5000); // 5 секунд
+
+      return () => clearInterval(interval);
+    }
+  }, [linkData, telegramId, loadData]);
+
+  // Генерация ссылки
   const handleGenerateLink = async () => {
     setLinkLoading(true);
     setLinkData(null);
@@ -127,7 +138,7 @@ export default function DashboardPage() {
         setPoints(result.newPoints ?? points + 15);
         setBonusClaimed(true);
         alert(result.message || 'Бонус +15 получен!');
-        loadData(); // обновляем все данные (баллы, статус бонуса)
+        loadData(); // обновляем данные
       } else {
         alert(result.message || 'Не удалось получить бонус');
       }
@@ -136,6 +147,11 @@ export default function DashboardPage() {
     } finally {
       setClaimLoading(false);
     }
+  };
+
+  // Ручное обновление (на всякий случай)
+  const handleRefresh = () => {
+    loadData();
   };
 
   if (status === 'loading' || loading) {
@@ -310,7 +326,7 @@ export default function DashboardPage() {
                 )}
               </div>
             ) : (
-              // Telegram ПРИВЯЗАН — показываем кнопку проверки/получения
+              // Telegram ПРИВЯЗАН
               <div>
                 <p className="text-green-400 mb-4 font-medium">
                   Telegram привязан (@{telegramUsername || telegramId.slice(0, 8) + '...'}) 
