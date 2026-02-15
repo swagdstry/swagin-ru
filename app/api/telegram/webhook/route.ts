@@ -1,73 +1,41 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Bot, webhookCallback } from 'grammy';
-import { supabaseAdmin } from '@/lib/supabase';
-export const dynamic = 'force-dynamic'; 
+// app/api/telegram/webhook/route.ts
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const fetchCache = 'force-no-store';
+export const maxDuration = 30; // увеличим таймаут на 30s
+
+import { NextRequest } from 'next/server';
+import { Bot, webhookCallback } from 'grammy';
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-if (!token) throw new Error('TELEGRAM_BOT_TOKEN не задан');
+if (!token) {
+  console.error('TELEGRAM_BOT_TOKEN missing');
+}
 
-const bot = new Bot(token);
+const bot = new Bot(token || 'dummy');
 
-// Глобальный guard (опционально)
 bot.use(async (ctx, next) => {
-  if (!ctx.from) {
-    console.log('Update без from:', JSON.stringify(ctx.update, null, 2));
-    return;
-  }
+  console.log('=== RAW UPDATE FROM TELEGRAM ===');
+  console.log('Update ID:', ctx.update.update_id);
+  console.log('Full update:', JSON.stringify(ctx.update, null, 2));
+  console.log('From:', ctx.from?.id, ctx.from?.username, ctx.from?.first_name);
+  console.log('Chat:', ctx.chat?.id, ctx.chat?.type);
+  console.log('Message text:', ctx.message?.text);
+  console.log('Command match:', ctx.match);
   await next();
 });
 
-// /start handler
+// Самый простой обработчик — ответ на любое сообщение
+bot.on('message', async (ctx) => {
+  console.log('Message handler triggered');
+  const text = ctx.message.text || 'no text';
+  await ctx.reply(`Я получил твое сообщение: "${text}"\nТвой ID: ${ctx.from?.id || 'unknown'}`);
+});
+
+// Отдельный /start
 bot.command('start', async (ctx) => {
-  const code = ctx.match;
-
-  if (!ctx.from) {
-    await ctx.reply('Эта команда работает только от реального пользователя.');
-    return;
-  }
-
-  if (!code) {
-    await ctx.reply('Используй ссылку из сайта для привязки аккаунта!');
-    return;
-  }
-
-  const { data: profile, error } = await supabaseAdmin
-    .from('profiles')
-    .select('id')
-    .eq('telegram_link_code', code)
-    .single();
-
-  if (error || !profile) {
-    await ctx.reply('Неверный или истёкший код. Сгенерируй новый на сайте.');
-    return;
-  }
-
-  const { error: updateErr } = await supabaseAdmin
-    .from('profiles')
-    .update({
-      telegram_id: ctx.from.id,
-      telegram_link_code: null,
-    })
-    .eq('id', profile.id);
-
-  if (updateErr) {
-    console.error(updateErr);
-    await ctx.reply('Ошибка сервера. Попробуй позже.');
-    return;
-  }
-
-  await ctx.reply(
-    `Привязка успешна, ${ctx.from.first_name || 'путешественник'}!\n` +
-    'Вернись на сайт и забери +15 баллов за подписку на канал.'
-  );
+  console.log('/start triggered');
+  const code = ctx.match || 'no code';
+  await ctx.reply(`Команда /start с кодом: ${code}\nТвой ID: ${ctx.from?.id || 'unknown'}`);
 });
 
-bot.on('message:text', async (ctx) => {
-  if (!ctx.from) return;
-  await ctx.reply('Просто используй ссылку из сайта для привязки :)');
-});
-
-// Webhook
 export const POST = webhookCallback(bot, 'std/http');

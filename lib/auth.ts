@@ -1,23 +1,23 @@
 // lib/auth.ts
-import NextAuth from 'next-auth';
-import TwitchProvider from 'next-auth/providers/twitch';
+import NextAuth from "next-auth";
+import TwitchProvider from "next-auth/providers/twitch";
 
-if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
-  console.error('TWITCH_CLIENT_ID или TWITCH_CLIENT_SECRET не заданы!');
-}
-
+// Проверки env (Vercel любит логировать это)
 if (!process.env.NEXTAUTH_SECRET) {
-  console.error('NEXTAUTH_SECRET не задан!');
+  console.error("NEXTAUTH_SECRET is required!");
+}
+if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
+  console.error("TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET missing!");
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     TwitchProvider({
-      clientId: process.env.TWITCH_CLIENT_ID || 'dummy',
-      clientSecret: process.env.TWITCH_CLIENT_SECRET || 'dummy',
+      clientId: process.env.TWITCH_CLIENT_ID || 'dummy-for-logs',
+      clientSecret: process.env.TWITCH_CLIENT_SECRET || 'dummy-for-logs',
       authorization: {
         params: {
-          scope: 'user:read:email user:read:subscriptions openid',
+          scope: "user:read:email user:read:subscriptions openid",
         },
       },
     }),
@@ -26,7 +26,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
 
   session: {
-    strategy: 'jwt',
+    strategy: "jwt",
   },
 
   callbacks: {
@@ -41,11 +41,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.displayName = profile?.display_name ?? profile?.name;
       }
 
-      // Refresh логика с проверками
+      // Refresh с защитой
       if (
-        typeof token.expiresAt === 'number' &&
+        typeof token.expiresAt === "number" &&
         Date.now() >= token.expiresAt &&
-        typeof token.refreshToken === 'string'
+        typeof token.refreshToken === "string" &&
+        process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET
       ) {
         const refreshed = await refreshTwitchToken(token.refreshToken);
         if (refreshed?.access_token) {
@@ -54,7 +55,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.expiresAt = Date.now() + (refreshed.expires_in ?? 14400) * 1000;
           delete token.error;
         } else {
-          token.error = 'RefreshAccessTokenError';
+          token.error = "RefreshAccessTokenError";
         }
       }
 
@@ -74,16 +75,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
 
   pages: {
-    signIn: '/auth/login',
-    error: '/auth/error',  // добавь, если хочешь кастомную страницу ошибки
+    signIn: "/auth/login",
   },
 
-  debug: process.env.NODE_ENV === 'development',  // только в dev
+  debug: process.env.NODE_ENV === "development",
 });
 
 async function refreshTwitchToken(refreshToken: string) {
   if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
-    console.error('Env для refresh отсутствует');
+    console.error("Env for refresh missing");
     return null;
   }
 
@@ -91,23 +91,24 @@ async function refreshTwitchToken(refreshToken: string) {
     const params = new URLSearchParams({
       client_id: process.env.TWITCH_CLIENT_ID,
       client_secret: process.env.TWITCH_CLIENT_SECRET,
-      grant_type: 'refresh_token',
+      grant_type: "refresh_token",
       refresh_token: refreshToken,
     });
 
-    const res = await fetch('https://id.twitch.tv/oauth2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    const res = await fetch("https://id.twitch.tv/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
     });
 
     if (!res.ok) {
-      console.error('Refresh failed:', res.status, await res.text());
+      const text = await res.text();
+      console.error("Refresh failed:", res.status, text);
       return null;
     }
     return await res.json();
   } catch (err) {
-    console.error('Refresh error:', err);
+    console.error("Refresh error:", err);
     return null;
   }
 }
