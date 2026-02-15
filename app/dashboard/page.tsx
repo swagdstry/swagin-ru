@@ -26,7 +26,7 @@ export default function DashboardPage() {
 
   const [claimLoading, setClaimLoading] = useState(false);
 
-  // Загрузка всех данных
+  // Загрузка данных
   const loadData = useCallback(async () => {
     if (!session?.user?.twitchId) return;
 
@@ -46,7 +46,7 @@ export default function DashboardPage() {
         console.warn('Профиль не загрузился:', profileRes.status);
       }
 
-      // Подписка Twitch
+      // Подписка
       const subData = await checkSubscription();
       setSubStatus(subData || { subscribed: false });
 
@@ -77,7 +77,6 @@ export default function DashboardPage() {
         }
       }
 
-      // Fallback
       setTwitchProfile({
         avatar: session.user.image || '/default-avatar.png',
         banner: session.user.image || '/default-avatar.png',
@@ -98,18 +97,21 @@ export default function DashboardPage() {
     }
   }, [status, loadData]);
 
-  // Поллинг после генерации ссылки (каждые 5 сек проверяем привязку)
+  // Автообновление после генерации ссылки (чтобы поймать привязку)
   useEffect(() => {
-    if (linkData?.link && !telegramId) {
-      const interval = setInterval(() => {
-        loadData();
-      }, 5000); // 5 секунд
+    let interval: NodeJS.Timeout | null = null;
 
-      return () => clearInterval(interval);
+    if (linkData?.link && !telegramId) {
+      interval = setInterval(() => {
+        loadData();
+      }, 5000); // каждые 5 секунд
     }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [linkData, telegramId, loadData]);
 
-  // Генерация ссылки
   const handleGenerateLink = async () => {
     setLinkLoading(true);
     setLinkData(null);
@@ -127,7 +129,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Проверка и начисление бонуса
   const handleClaimBonus = async () => {
     if (!session?.user?.twitchId || bonusClaimed) return;
 
@@ -138,7 +139,7 @@ export default function DashboardPage() {
         setPoints(result.newPoints ?? points + 15);
         setBonusClaimed(true);
         alert(result.message || 'Бонус +15 получен!');
-        loadData(); // обновляем данные
+        loadData();
       } else {
         alert(result.message || 'Не удалось получить бонус');
       }
@@ -149,7 +150,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Ручное обновление (на всякий случай)
   const handleRefresh = () => {
     loadData();
   };
@@ -228,7 +228,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Shimmer */}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
           </div>
         </Link>
@@ -296,7 +295,7 @@ export default function DashboardPage() {
             </p>
 
             {!telegramId ? (
-              // Telegram НЕ привязан
+              // НЕ привязан
               <div>
                 <button
                   onClick={handleGenerateLink}
@@ -326,7 +325,7 @@ export default function DashboardPage() {
                 )}
               </div>
             ) : (
-              // Telegram ПРИВЯЗАН
+              // ПРИВЯЗАН
               <div>
                 <p className="text-green-400 mb-4 font-medium">
                   Telegram привязан (@{telegramUsername || telegramId.slice(0, 8) + '...'}) 
