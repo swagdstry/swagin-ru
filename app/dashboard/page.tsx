@@ -127,7 +127,7 @@ export default function DashboardPage() {
         setPoints(result.newPoints ?? points + 15);
         setBonusClaimed(true);
         alert(result.message || 'Бонус +15 получен!');
-        loadData(); // обновляем все данные
+        loadData(); // обновляем все данные (баллы, статус бонуса)
       } else {
         alert(result.message || 'Не удалось получить бонус');
       }
