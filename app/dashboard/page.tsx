@@ -26,7 +26,7 @@ export default function DashboardPage() {
 
   const [claimLoading, setClaimLoading] = useState(false);
 
-  // Загрузка данных
+  // Загрузка всех данных
   const loadData = useCallback(async () => {
     if (!session?.user?.twitchId) return;
 
@@ -34,19 +34,22 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
 
+      console.log('[DASHBOARD] Загружаем данные профиля...');
+
       // Профиль
       const profileRes = await fetch('/api/user/profile');
       if (profileRes.ok) {
         const data = await profileRes.json();
+        console.log('[DASHBOARD] Данные профиля:', data);
         setPoints(data.points ?? 0);
         setBonusClaimed(data.bonus_claimed ?? false);
         setTelegramId(data.telegram_id ?? null);
         setTelegramUsername(data.telegram_username ?? null);
       } else {
-        console.warn('Профиль не загрузился:', profileRes.status);
+        console.warn('[DASHBOARD] Профиль не загрузился:', profileRes.status);
       }
 
-      // Подписка
+      // Подписка Twitch
       const subData = await checkSubscription();
       setSubStatus(subData || { subscribed: false });
 
@@ -82,7 +85,7 @@ export default function DashboardPage() {
         banner: session.user.image || '/default-avatar.png',
       });
     } catch (err: any) {
-      console.error('Dashboard load error:', err);
+      console.error('[DASHBOARD] Ошибка загрузки:', err);
       setError('Ошибка загрузки данных');
     } finally {
       setLoading(false);
@@ -97,18 +100,22 @@ export default function DashboardPage() {
     }
   }, [status, loadData]);
 
-  // Автообновление после генерации ссылки (чтобы поймать привязку)
+  // Автообновление после генерации ссылки (чтобы поймать привязку бота)
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
 
     if (linkData?.link && !telegramId) {
+      console.log('[DASHBOARD] Запускаем polling для проверки привязки Telegram');
       interval = setInterval(() => {
         loadData();
       }, 5000); // каждые 5 секунд
     }
 
     return () => {
-      if (interval) clearInterval(interval);
+      if (interval) {
+        console.log('[DASHBOARD] Останавливаем polling');
+        clearInterval(interval);
+      }
     };
   }, [linkData, telegramId, loadData]);
 
@@ -119,6 +126,7 @@ export default function DashboardPage() {
       const result = await generateTelegramLink();
       if (result.success && result.link) {
         setLinkData({ link: result.link });
+        console.log('[DASHBOARD] Ссылка сгенерирована:', result.link);
       } else {
         setError(result.message || 'Не удалось сгенерировать ссылку');
       }
@@ -139,7 +147,7 @@ export default function DashboardPage() {
         setPoints(result.newPoints ?? points + 15);
         setBonusClaimed(true);
         alert(result.message || 'Бонус +15 получен!');
-        loadData();
+        loadData(); // обновляем данные
       } else {
         alert(result.message || 'Не удалось получить бонус');
       }
@@ -150,6 +158,7 @@ export default function DashboardPage() {
     }
   };
 
+  // Ручное обновление (на случай, если polling не нужен)
   const handleRefresh = () => {
     loadData();
   };
@@ -294,58 +303,61 @@ export default function DashboardPage() {
               После подписки привяжи аккаунт и нажми кнопку ниже — система проверит и начислит баллы.
             </p>
 
-            {!telegramId ? (
-              // НЕ привязан
-              <div>
+            <div className="mt-4 flex items-center gap-4">
+              {!telegramId ? (
                 <button
                   onClick={handleGenerateLink}
                   disabled={linkLoading}
-                  className={`w-full md:w-auto px-8 py-4 rounded-xl font-bold transition ${
+                  className={`px-8 py-4 rounded-xl font-bold transition ${
                     linkLoading ? 'bg-gray-600 cursor-not-allowed text-gray-300' : 'bg-yellow-600 hover:bg-yellow-500 text-white'
                   }`}
                 >
                   {linkLoading ? 'Генерация...' : 'Привязать Telegram'}
                 </button>
+              ) : (
+                <div className="flex items-center gap-4 flex-wrap">
+                  <p className="text-green-400 font-medium">
+                    Telegram привязан (@{telegramUsername || telegramId.slice(0, 8) + '...'}) 
+                  </p>
 
-                {linkData?.link && (
-                  <div className="mt-4 p-4 bg-zinc-900 rounded-lg border border-zinc-700">
-                    <p className="text-zinc-300 mb-2">Перейди по этой ссылке в бота:</p>
-                    <a
-                      href={linkData.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#9146FF] hover:underline break-all block font-medium"
-                    >
-                      {linkData.link}
-                    </a>
-                    <p className="text-sm text-zinc-500 mt-3">
-                      После перехода бот подтвердит привязку. Затем вернись сюда и нажми кнопку ниже.
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              // ПРИВЯЗАН
-              <div>
-                <p className="text-green-400 mb-4 font-medium">
-                  Telegram привязан (@{telegramUsername || telegramId.slice(0, 8) + '...'}) 
-                </p>
+                  <button
+                    onClick={handleClaimBonus}
+                    disabled={claimLoading || bonusClaimed}
+                    className={`px-8 py-4 rounded-xl font-bold transition ${
+                      bonusClaimed || claimLoading
+                        ? 'bg-gray-600 cursor-not-allowed text-gray-300'
+                        : 'bg-[#9146FF] hover:bg-[#a76bff] text-white'
+                    }`}
+                  >
+                    {claimLoading
+                      ? 'Проверка подписки...'
+                      : bonusClaimed
+                      ? 'Бонус получен'
+                      : 'Проверить подписку и получить +15'}
+                  </button>
+                </div>
+              )}
 
-                <button
-                  onClick={handleClaimBonus}
-                  disabled={claimLoading || bonusClaimed}
-                  className={`w-full md:w-auto px-8 py-4 rounded-xl font-bold transition ${
-                    bonusClaimed || claimLoading
-                      ? 'bg-gray-600 cursor-not-allowed text-gray-300'
-                      : 'bg-[#9146FF] hover:bg-[#a76bff] text-white'
-                  }`}
+              <button
+                onClick={handleRefresh}
+                className="p-3 bg-zinc-700 hover:bg-zinc-600 rounded-full transition"
+                title="Обновить данные"
+              >
+                <RefreshCw size={20} />
+              </button>
+            </div>
+
+            {linkData?.link && (
+              <div className="mt-6 p-4 bg-zinc-900 rounded-lg border border-zinc-700">
+                <p className="text-zinc-300 mb-2">Ссылка для бота (уже открыта):</p>
+                <a
+                  href={linkData.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#9146FF] hover:underline break-all block font-medium"
                 >
-                  {claimLoading
-                    ? 'Проверка подписки...'
-                    : bonusClaimed
-                    ? 'Бонус получен'
-                    : 'Проверить подписку и получить +15'}
-                </button>
+                  {linkData.link}
+                </a>
               </div>
             )}
           </div>
