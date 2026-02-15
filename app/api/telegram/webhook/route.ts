@@ -1,14 +1,15 @@
-// app/api/telegram/webhook/route.ts — чистый рабочий webhook 2026
+// app/api/telegram/webhook/route.ts
+// Чистый webhook с принудительным nodejs runtime (Vercel edge ломается с grammy/supabase)
 
-// Обязательно отключаем edge runtime — Vercel по умолчанию использует его и ломает grammy/supabase
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-export const maxDuration = 30; // даём 30 секунд на обработку (Vercel Hobby лимит)
+export const runtime = 'nodejs';       // ← КЛЮЧЕВОЕ: отключаем edge runtime
+export const dynamic = 'force-dynamic'; // каждый запрос свежий, без кэша
+export const maxDuration = 30;         // таймаут 30 секунд (на Vercel Hobby по умолчанию 10s)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Bot, webhookCallback } from 'grammy';
 
-console.log('WEBHOOK ROUTE LOADED — файл импортирован, функция готова к запуску');
+// Логируем при загрузке файла (проверяем, что Vercel вообще видит роут)
+console.log('WEBHOOK ROUTE LOADED — файл успешно импортирован и готов к работе');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -16,44 +17,52 @@ if (!token) {
   console.error('TELEGRAM_BOT_TOKEN НЕ НАЙДЕН В ENV VERCEL');
 }
 
-const bot = new Bot(token || 'dummy');
+const bot = new Bot(token || 'dummy-test-token-do-not-use-in-prod');
 
 bot.use(async (ctx, next) => {
-  console.log('WEBHOOK UPDATE RECEIVED — middleware сработал');
-  console.log('Time:', new Date().toISOString());
+  console.log('WEBHOOK: ПОЛУЧЕНО ОБНОВЛЕНИЕ ОТ TELEGRAM');
+  console.log('Время:', new Date().toISOString());
   console.log('Update type:', Object.keys(ctx.update)[0]);
-  console.log('From ID / username:', ctx.from?.id, ctx.from?.username || 'нет');
-  console.log('Message text:', ctx.message?.text || 'нет текста');
-  console.log('Command match:', ctx.match || 'нет');
+  console.log('From ID / username:', ctx.from?.id, ctx.from?.username || 'нет username');
+  console.log('Chat ID / type:', ctx.chat?.id, ctx.chat?.type);
+  console.log('Текст сообщения:', ctx.message?.text || 'нет текста');
+  console.log('Match (если команда):', ctx.match || 'нет');
+  console.log('Полный update (JSON):', JSON.stringify(ctx.update, null, 2));
   await next();
 });
 
-// Простой ответ на любое сообщение (чтобы убедиться, что reply работает)
-bot.on('message', async (ctx) => {
-  console.log('MESSAGE HANDLER сработал');
-  const text = ctx.message.text || '[нет текста]';
+// Отвечаем на любое текстовое сообщение (для теста)
+bot.on('message:text', async (ctx) => {
+  console.log('WEBHOOK: ОБРАБОТЧИК ТЕКСТОВОГО СООБЩЕНИЯ СРАБОТАЛ');
+  const text = ctx.message.text;
+  const userId = ctx.from?.id || 'неизвестен';
+
   await ctx.reply(
-    `Получил: "${text}"\n` +
-    `Твой ID: ${ctx.from?.id || 'неизвестен'}\n` +
-    `Время: ${new Date().toISOString()}\n\n` +
-    `Бот живой! Можно добавлять логику привязки.`
+    `Я получил твое сообщение!\n\n` +
+    `Текст: "${text}"\n` +
+    `Твой Telegram ID: ${userId}\n\n` +
+    `Бот живой и работает на Vercel. Можно добавлять логику привязки по коду.`
   );
 });
 
-// /start отдельно
+// Отдельный обработчик /start (чтобы ловить команды с параметрами)
 bot.command('start', async (ctx) => {
-  console.log('/start HANDLER сработал');
+  console.log('WEBHOOK: КОМАНДА /start СРАБОТАЛА');
   const code = ctx.match || 'кода нет';
+  const userId = ctx.from?.id || 'неизвестен';
+
   await ctx.reply(
-    `/start получен!\n` +
-    `Код: ${code}\n` +
-    `Твой ID: ${ctx.from?.id || 'неизвестен'}`
+    `Команда /start получена!\n` +
+    `Переданный код: ${code}\n` +
+    `Твой Telegram ID: ${userId}\n\n` +
+    `Если код из сайта — привязка должна пройти.`
   );
 });
 
+// Экспорт webhook
 export const POST = webhookCallback(bot, 'std/http');
 
-// Для теста в браузере
+// Для проверки в браузере (GET должен вернуть 200)
 export async function GET() {
-  return new Response('Webhook активен (GET для теста). Отправляй POST от Telegram.', { status: 200 });
+  return new Response('Webhook активен. Отправляй POST от Telegram.', { status: 200 });
 }
