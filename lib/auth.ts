@@ -2,21 +2,23 @@
 import NextAuth from "next-auth";
 import TwitchProvider from "next-auth/providers/twitch";
 
+if (!process.env.NEXTAUTH_SECRET) {
+  console.error("NEXTAUTH_SECRET is required!");
+}
+if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
+  console.error("TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET missing!");
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     TwitchProvider({
       clientId: process.env.TWITCH_CLIENT_ID!,
       clientSecret: process.env.TWITCH_CLIENT_SECRET!,
-
       authorization: {
         params: {
           scope: "user:read:email channel:read:subscriptions user:read:subscriptions",
         },
       },
-
-      // ← Главный фикс для Twitch (он не возвращает id_token)
-      checks: ["pkce"],
-      idToken: false,
     }),
   ],
 
@@ -73,7 +75,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   debug: process.env.NODE_ENV === "development",
 });
 
-// Refresh функция
 async function refreshTwitchToken(refreshToken: string) {
   const params = new URLSearchParams({
     client_id: process.env.TWITCH_CLIENT_ID!,
