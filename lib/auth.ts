@@ -1,7 +1,8 @@
-// lib/auth.ts — полный код, который должен работать
+// lib/auth.ts
 import NextAuth from "next-auth";
 import TwitchProvider from "next-auth/providers/twitch";
 
+// Проверки env (чтобы видеть в логах Vercel)
 if (!process.env.NEXTAUTH_SECRET) {
   console.error("NEXTAUTH_SECRET is required!");
 }
@@ -19,9 +20,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           scope: 'user:read:email channel:read:subscriptions user:read:subscriptions',
         },
       },
-      // Единственный фикс, который нужен — отключаем id_token
-      idToken: false,
+      // ФИКС №1: отключаем проверку id_token (Twitch его не возвращает)
       checks: ['pkce'],
+      // ФИКС №2: явно говорим, что id_token не нужен
+      idToken: false,
     }),
   ],
 
@@ -43,6 +45,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.displayName = profile?.display_name ?? profile?.name;
       }
 
+      // Refresh с защитой
       if (
         typeof token.expiresAt === "number" &&
         Date.now() >= token.expiresAt &&
