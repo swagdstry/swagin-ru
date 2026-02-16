@@ -16,7 +16,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.TWITCH_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope: "user:read:email channel:read:subscriptions user:read:subscriptions",
+          scope: 'user:read:email', // ← только это! остальные scope ломают callback
         },
       },
     }),
