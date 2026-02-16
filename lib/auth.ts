@@ -2,7 +2,7 @@
 import NextAuth from "next-auth";
 import TwitchProvider from "next-auth/providers/twitch";
 
-// Проверки env (Vercel любит логировать это)
+// Проверки env (чтобы видеть в логах Vercel, если что-то не так)
 if (!process.env.NEXTAUTH_SECRET) {
   console.error("NEXTAUTH_SECRET is required!");
 }
@@ -20,9 +20,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           scope: 'user:read:email channel:read:subscriptions user:read:subscriptions',
         },
       },
-      // ФИКС: отключаем проверку id_token (Twitch его не возвращает)
+      // ФИКС: отключаем требование id_token (Twitch его не возвращает)
       checks: ['pkce'],
-      idToken: false, // дополнительно отключаем id_token (решает "id_token property must be a string")
+      idToken: false,  // дополнительно отключаем id_token (решает краш)
     }),
   ],
 
