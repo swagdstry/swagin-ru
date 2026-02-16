@@ -2,7 +2,7 @@
 import NextAuth from "next-auth";
 import TwitchProvider from "next-auth/providers/twitch";
 
-// Проверки env (чтобы видеть в логах Vercel, если что-то не так)
+// Проверки env (Vercel любит логировать это)
 if (!process.env.NEXTAUTH_SECRET) {
   console.error("NEXTAUTH_SECRET is required!");
 }
@@ -22,7 +22,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       // ФИКС: отключаем требование id_token (Twitch его не возвращает)
       checks: ['pkce'],
-      idToken: false,  // дополнительно отключаем id_token (решает краш)
     }),
   ],
 
