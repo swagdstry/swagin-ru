@@ -1,8 +1,28 @@
 // lib/auth.ts
 import NextAuth from "next-auth";
-import TwitchProvider from "next-auth/providers/twitch";
+import Twitch from "next-auth/providers/twitch";
+import type { JWT } from "next-auth/jwt";
+import type { Account, Profile, Session, User } from "next-auth";
 
-// Проверки env (Vercel любит логировать это)
+// Расширение типов
+declare module "next-auth" {
+  interface User {
+    twitchId?: string;
+    login?: string;
+    displayName?: string;
+  }
+  interface Session {
+    user: {
+      accessToken?: string;
+      twitchId?: string;
+      login?: string;
+      displayName?: string;
+      error?: string;
+    } & User;
+  }
+}
+
+// Проверки env
 if (!process.env.NEXTAUTH_SECRET) {
   console.error("NEXTAUTH_SECRET is required!");
 }
@@ -12,15 +32,33 @@ if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
-    TwitchProvider({
+    {
+      id: "twitch",
+      name: "Twitch",
+      type: "oauth",
       clientId: process.env.TWITCH_CLIENT_ID || 'dummy-for-logs',
       clientSecret: process.env.TWITCH_CLIENT_SECRET || 'dummy-for-logs',
+      issuer: "https://id.twitch.tv/oauth2", // ← фикс ошибки InvalidEndpoints
       authorization: {
+        url: "https://id.twitch.tv/oauth2/authorize",
         params: {
-          scope: 'user:read:email channel:read:subscriptions user:read:subscriptions',
+          scope: "user:read:email channel:read:subscriptions user:read:subscriptions",
         },
       },
-    }),
+      token: "https://id.twitch.tv/oauth2/token",
+      checks: ["pkce"],
+      profile(profile: any) {
+        return {
+          id: profile.id || profile.sub || "",
+          name: profile.login || profile.preferred_username || profile.name || "",
+          email: profile.email,
+          image: profile.profile_image_url,
+          twitchId: profile.id || profile.sub || "",
+          login: profile.login || profile.preferred_username || "",
+          displayName: profile.display_name || profile.name || "",
+        };
+      },
+    },
   ],
 
   secret: process.env.NEXTAUTH_SECRET,
@@ -30,18 +68,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
 
   callbacks: {
-    async jwt({ token, account, profile }) {
+    async jwt(params: {
+      token: JWT;
+      user?: User;
+      account?: Account | null;
+      profile?: Profile | null;
+      trigger?: "signIn" | "signUp" | "update" | "session";
+      isNewUser?: boolean;
+      session?: any;
+    }) {
+      const { token, account, profile } = params;
+
       if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token ?? null;
+        token.accessToken = account.access_token as string | undefined;
+        token.refreshToken = account.refresh_token as string | undefined;
         token.expiresAt = (account.expires_at ?? Math.floor(Date.now() / 1000) + 14400) * 1000;
 
-        token.login = typeof profile?.login === "string" ? profile.login : undefined;
-        token.displayName = typeof profile?.display_name === "string" ? profile.display_name : undefined;
-        token.twitchId = typeof profile?.id === "string" ? profile.id : undefined;
+        const p = profile as any;
+        token.twitchId = p?.id ?? p?.sub ?? undefined;
+        token.login = p?.login ?? p?.preferred_username ?? undefined;
+        token.displayName = p?.display_name ?? p?.name ?? undefined;
       }
 
-      // Refresh с защитой
       if (
         typeof token.expiresAt === "number" &&
         Date.now() >= token.expiresAt &&
@@ -62,14 +110,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
 
-    async session({ session, token }) {
-      if (session.user && token) {
+    async session(params: {
+      session: Session;
+      token: JWT;
+      user?: User;
+      trigger?: "signIn" | "signUp" | "update" | "session";
+    }) {
+      const { session, token } = params;
+
+      if (session.user) {
         session.user.accessToken = token.accessToken as string | undefined;
         session.user.twitchId = token.twitchId as string | undefined;
         session.user.login = token.login as string | undefined;
         session.user.displayName = token.displayName as string | undefined;
         session.error = token.error as string | undefined;
       }
+
       return session;
     },
   },
